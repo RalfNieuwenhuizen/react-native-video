@@ -34,7 +34,6 @@ import com.google.android.exoplayer2.PlaybackParameters;
 import com.google.android.exoplayer2.Player;
 import com.google.android.exoplayer2.SimpleExoPlayer;
 import com.google.android.exoplayer2.Timeline;
-import com.google.android.exoplayer2.extractor.DefaultExtractorsFactory;
 import com.google.android.exoplayer2.mediacodec.MediaCodecRenderer;
 import com.google.android.exoplayer2.mediacodec.MediaCodecUtil;
 import com.google.android.exoplayer2.metadata.Metadata;
@@ -58,7 +57,9 @@ import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.upstream.DataSource;
 import com.google.android.exoplayer2.upstream.DefaultBandwidthMeter;
-import com.google.android.exoplayer2.util.MimeTypes;
+import com.google.android.exoplayer2.upstream.cache.Cache;
+import com.google.android.exoplayer2.upstream.cache.CacheDataSourceFactory;
+import com.google.android.exoplayer2.upstream.cache.SimpleCache;
 import com.google.android.exoplayer2.util.Util;
 
 import java.net.CookieHandler;
@@ -93,6 +94,7 @@ class ReactExoplayerView extends FrameLayout implements
     private Handler mainHandler;
     private ExoPlayerView exoPlayerView;
 
+    private SimpleCache downloadCache;
     private DataSource.Factory mediaDataSourceFactory;
     private SimpleExoPlayer player;
     private MappingTrackSelector trackSelector;
@@ -168,6 +170,8 @@ class ReactExoplayerView extends FrameLayout implements
     private void createViews() {
         clearResumePosition();
         mediaDataSourceFactory = buildDataSourceFactory(true);
+        downloadCache = ExoPlayerCache.getInstance(getContext());
+
         mainHandler = new Handler();
         if (CookieHandler.getDefault() != DEFAULT_COOKIE_MANAGER) {
             CookieHandler.setDefault(DEFAULT_COOKIE_MANAGER);
@@ -279,8 +283,8 @@ class ReactExoplayerView extends FrameLayout implements
             case C.TYPE_HLS:
                 return new HlsMediaSource(uri, mediaDataSourceFactory, mainHandler, null);
             case C.TYPE_OTHER:
-                return new ExtractorMediaSource(uri, mediaDataSourceFactory, new DefaultExtractorsFactory(),
-                        mainHandler, null);
+                return new ExtractorMediaSource.Factory(new CacheDataSourceFactory(downloadCache, mediaDataSourceFactory))
+                        .createMediaSource(uri);
             default: {
                 throw new IllegalStateException("Unsupported type: " + type);
             }
@@ -723,57 +727,57 @@ class ReactExoplayerView extends FrameLayout implements
     }
 
     public void setSelectedTextTrack(String type, Dynamic value) {
-        textTrackType = type;
-        textTrackValue = value;
-
-        int index = getTextTrackRendererIndex();
-        if (index == C.INDEX_UNSET) {
-            return;
-        }
-        MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
-        if (info == null) {
-            return;
-        }
-
-        TrackGroupArray groups = info.getTrackGroups(index);
-        int trackIndex = C.INDEX_UNSET;
-        if (TextUtils.isEmpty(type)) {
-            // Do nothing
-        } else if (type.equals("disabled")) {
-            trackSelector.setSelectionOverride(index, groups, null);
-            return;
-        } else if (type.equals("language")) {
-            for (int i = 0; i < groups.length; ++i) {
-                Format format = groups.get(i).getFormat(0);
-                if (format.language != null && format.language.equals(value.asString())) {
-                    trackIndex = i;
-                    break;
-                }
-            }
-        } else if (type.equals("title")) {
-            for (int i = 0; i < groups.length; ++i) {
-                Format format = groups.get(i).getFormat(0);
-                if (format.id != null && format.id.equals(value.asString())) {
-                    trackIndex = i;
-                    break;
-                }
-            }
-        } else if (type.equals("index")) {
-            trackIndex = value.asInt();
-        } else { // default. invalid type or "system"
-            trackSelector.clearSelectionOverrides(index);
-            return;
-        }
-
-        if (trackIndex == C.INDEX_UNSET) {
-            trackSelector.clearSelectionOverrides(trackIndex);
-            return;
-        }
-
-        MappingTrackSelector.SelectionOverride override
-                = new MappingTrackSelector.SelectionOverride(
-                        new FixedTrackSelection.Factory(), trackIndex, 0);
-        trackSelector.setSelectionOverride(index, groups, override);
+//        textTrackType = type;
+//        textTrackValue = value;
+//
+//        int index = getTextTrackRendererIndex();
+//        if (index == C.INDEX_UNSET) {
+//            return;
+//        }
+//        MappingTrackSelector.MappedTrackInfo info = trackSelector.getCurrentMappedTrackInfo();
+//        if (info == null) {
+//            return;
+//        }
+//
+//        TrackGroupArray groups = info.getTrackGroups(index);
+//        int trackIndex = C.INDEX_UNSET;
+//        if (TextUtils.isEmpty(type)) {
+//            // Do nothing
+//        } else if (type.equals("disabled")) {
+//            trackSelector.setSelectionOverride(index, groups, null);
+//            return;
+//        } else if (type.equals("language")) {
+//            for (int i = 0; i < groups.length; ++i) {
+//                Format format = groups.get(i).getFormat(0);
+//                if (format.language != null && format.language.equals(value.asString())) {
+//                    trackIndex = i;
+//                    break;
+//                }
+//            }
+//        } else if (type.equals("title")) {
+//            for (int i = 0; i < groups.length; ++i) {
+//                Format format = groups.get(i).getFormat(0);
+//                if (format.id != null && format.id.equals(value.asString())) {
+//                    trackIndex = i;
+//                    break;
+//                }
+//            }
+//        } else if (type.equals("index")) {
+//            trackIndex = value.asInt();
+//        } else { // default. invalid type or "system"
+//            trackSelector.clearSelectionOverrides(index);
+//            return;
+//        }
+//
+//        if (trackIndex == C.INDEX_UNSET) {
+//            trackSelector.clearSelectionOverrides(trackIndex);
+//            return;
+//        }
+//
+//        MappingTrackSelector.SelectionOverride override
+//                = new MappingTrackSelector.SelectionOverride(
+//                        new FixedTrackSelection.Factory(), trackIndex, 0);
+//        trackSelector.setSelectionOverride(index, groups, override);
     }
 
     public void setPausedModifier(boolean paused) {
